@@ -32,9 +32,16 @@ print(league_avg, len(league_avg))
 import statsmodels.api as sm
 import numpy as np
 
+def add_const(vect):
+	v = [[1] for i in range(len(vect))]
+	for i, row in enumerate(vect):
+		for elem in row:
+			v[i].append(elem)
+	return v
+
 dependants = [win_perc.values, opponent_pts_per_game]
 
-_x = np.array(df.values) # explanatory vars
+_x = np.array(add_const(df.values)) # explanatory vars
 _y = np.array(dependants[0]) # observed vars
 
 def LLS(x, y, z, viz=False):
@@ -43,6 +50,7 @@ def LLS(x, y, z, viz=False):
 	beta = np.dot(np.linalg.inv(np.dot(x.T, x)), beta)
 
 	if viz:
+		z = add_const([z])[0]
 		pred = np.dot(beta.T, z)
 		print( x, x.shape )
 		print( y, y.shape )
@@ -65,6 +73,8 @@ cov = LLS(_x, _y, league_avg, True)
 
 def GLS(x, y, z):
 	cov_mat, residual = LLS(x, y, None)
+	#print(np.cov(x),cov_mat)
+	cov_mat = 1/ np.cov(x)
 	omega_inv = np.linalg.inv(cov_mat)
 	y_cov = np.dot(omega_inv, y)
 	x_cov = np.dot(omega_inv, x)
@@ -72,14 +82,15 @@ def GLS(x, y, z):
 	beta_hat = np.dot(np.linalg.inv(np.dot(x.T, x_cov)),
 			  np.dot(x.T, y_cov))
 
-	lls_y = np.dot(residual, y)
-
-	# 	
+	#lls_y = np.dot(residual, y)
+	# Minimize least squares of lls prediction
 		
 	residual = np.dot(residual, z)
 	pred = np.dot(beta_hat.T, z)
 	adj_pred = residual + pred
-	print("GLS Prediction:", pred, residual, adj_pred)
+	print("GLS Predict:", pred,
+	      "LLS Predict:", residual,
+	      "LLS + GLS:", adj_pred)
 	return beta_hat
 
 for team in _x:
