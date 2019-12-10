@@ -5,25 +5,34 @@ df = df.drop(["G"], axis=1)
 
 league_avg = df.iloc[30].values
 df = df.drop([30], axis=0)
-league_avg = league_avg[2:-3]
+league_avg = league_avg[2:-1]
 
 team_names = df[['Team']]
 df = df.drop(['Team'], axis=1)
 
 win_perc = df[["Win %"]]
 df = df.drop(["Win %"], axis=1)
-
+'''
 opponent_pts_per_game = df[["PA/G"]]
 df = df.drop(["PA/G"], axis=1)
 
 team_pts = df[["PTS"]]
 df = df.drop(['PTS'], axis=1)
-
+'''
 rank = df[["Rk (in terms of points)"]]
 df = df.drop(["Rk (in terms of points)"], axis=1)
 
+#league_avg = df.iloc[30].values
+#df = df.drop([30], axis=0)
+#league_avg = league_avg[2:-3]
+
+#FG%, 3P%, 3PA, fta, TRB, AST, PTS, PA/G
 
 
+titles = ['MP', 'FG', 'FGA', 'FG%', '3P', '3PA', '3P%', '2P', '2PA', '2P%', 'FT', 'FTA', 'FT%', 'ORB', 'DRB', 'TRB', 'AST', 'STL', 'BLK', 'TOV', 'PF', 'PTS', 'PA/G']
+for t in titles:
+	print(t)
+tests = ['FG%', '3P%', '3PA', 'FTA', 'TRB', 'AST', 'PTS', 'PA/G']
 
 print(df.head)
 #print(team_names)
@@ -39,22 +48,25 @@ def add_const(vect):
 			v[i].append(elem)
 	return v
 
-dependants = [win_perc.values, opponent_pts_per_game]
+#dependants = [win_perc.values, opponent_pts_per_game]
 
-_x = np.array(add_const(df.values)) # explanatory vars
-_y = np.array(dependants[0]) # observed vars
+#_x = np.array(add_const(df.values)) # explanatory vars
+_x = np.array((df.values)) # explanatory vars
+_y = np.array(win_perc.values) # observed vars
 
-def LLS(x, y, z, viz=False):
+def LLS(x, y, z=[None], viz=False):
 
 	beta = np.dot(x.T, y)
 	beta = np.dot(np.linalg.inv(np.dot(x.T, x)), beta)
 
 	if viz:
-		z = add_const([z])[0]
+		#z = add_const([z])[0]
 		pred = np.dot(beta.T, z)
 		print( x, x.shape )
 		print( y, y.shape )
-		print(beta, sum(beta))
+		print(beta, sum(beta), beta.shape)
+		for elem in beta:
+			print(str(elem)[1:-1])
 		print("Prediction: ", pred)
 	
 	variance = 0
@@ -68,14 +80,43 @@ def LLS(x, y, z, viz=False):
 
 	return cov_mat, beta.T
 
-cov = LLS(_x, _y, league_avg, True)
+cov, lls_beta = LLS(_x, _y, league_avg, True)
 #print(cov)
+
+
+# Testing to see which titles have best accuracy
+df_old = df
+test_names = []
+test_res = []
+for i in range(len(titles) - 3):
+	print(i)
+	sample = [titles[i]]
+	sample.append(tests[1])
+	sample.append(tests[-2])
+	sample.append(tests[-1])
+
+	for t in titles:
+		if t not in sample:
+			df = df.drop([t], axis=1)
+
+	_, beta = LLS(df.values, win_perc.values)
+
+	summ = 0	
+	for i, team in enumerate(df.values):
+		summ += np.dot(beta, team) - win_perc.values[i]
+		#print(sample, np.dot(beta, team) )
+
+	print(sample, summ)
+	for num in beta:
+		print(str(num)[1:-1])
+	
+	df = df_old
 
 def GLS(x, y, z):
 	cov_mat, residual = LLS(x, y, None)
 	#print(np.cov(x),cov_mat)
-	cov_mat = 1/ np.cov(x)
-	omega_inv = np.linalg.inv(cov_mat)
+	cov_mat = 1/ cov_mat
+	omega_inv =  np.linalg.inv(cov_mat)
 	y_cov = np.dot(omega_inv, y)
 	x_cov = np.dot(omega_inv, x)
 
@@ -87,17 +128,55 @@ def GLS(x, y, z):
 		
 	residual = np.dot(residual, z)
 	pred = np.dot(beta_hat.T, z)
-	adj_pred = residual + pred
-	print("GLS Predict:", pred,
-	      "LLS Predict:", residual,
-	      "LLS + GLS:", adj_pred)
+	adj_pred = residual + np.sqrt(pred)/1000
+		
+	#print("GLS Predict:", pred,
+	#      "LLS Predict:", residual,
+	#      "LLS + GLS:", adj_pred)
+
+	#print(str(residual)[1:-1]) #LLS result
+	#print("GLS" + str(pred)[1:-1]) #GLS result
+	print(str(adj_pred)[1:-1])
 	return beta_hat
 
 for team in _x:
-	GLS(_x, _y, team)
+	t = GLS(_x, _y, team)
 
 # Covariance Mat StackExch. https://bit.ly/348bmHv
 
+df = pd.read_csv("nba_stats_2017.csv")
+df = df.drop(["G"], axis=1)
+
+team_names = df[['Team']]
+df = df.drop(['Team'], axis=1)
+
+win_perc = df[["Win%"]]
+df = df.drop(["Win%"], axis=1)
+
+rank = df[["Rk"]]
+df = df.drop(["Rk"], axis=1)
+
+_x = df.values
+_y = win_perc.values
+
+# GLS
+print("GLS")
+for team in _x:
+	t = GLS(_x, _y, team)
+
+# LLS
+print("LLS")
+for i, row in enumerate(_x):
+	pred = np.dot(lls_beta, row)
+	print(str(pred[0]),) 
+# True value
+for i, row in enumerate(_x):
+	print(str(_y[i][0]))
+
+# LLS- true value
+for i, row in enumerate(_x):
+	pred = np.dot(lls_beta, row)
+	print(str((pred - _y[i])[0]))
 
 '''
 # Normalize x 
